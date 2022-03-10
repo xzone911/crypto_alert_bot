@@ -113,12 +113,54 @@ auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
 auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
 api = tweepy.API(auth)
 
-def user_info(screen_name, n_posts):
+# COIN PRICE 
+
+crypto_compare_api_key = 'f78fea12b032c8d3b1e8e2b1674433e4758c07692f79537447db10b374f77f56'
+
+def coin_price_history(crypto_symbol, num_days=20):
+
+    # request_url = f'https://min-api.cryptocompare.com/data/v2/histoday?fsym=ETH&tsym=USD&limit=20&toTs=-1&api_key={crypto_compare_api_key}'
+    request_url = f'https://min-api.cryptocompare.com/data/v2/histoday?fsym={crypto_symbol}&tsym=USD&limit={num_days}&toTs=-1&api_key=YOURKEYHERE'
+
+    r = requests.get(url=request_url)
+
+    data = r.json()['Data']['Data']
+    timestamp_prices = {}
+    for datum in data:
+        datum_date = datetime.fromtimestamp(datum['time']).date()
+        timestamp_prices[datum_date] = datum['close']
+
+    ts = list(timestamp_prices.keys())
+    prices = list(timestamp_prices.values())
+
+    # plt.plot(ts, prices)
+    # plt.show()
+
+    percent_increase = ((prices[-1] / prices[0]) - 1) * 100
+    price_variance = np.var(prices)
+    price_std = np.std(prices)
+    max_price = max(prices)
+    min_price = min(prices)
+    # print(f'Percent change over {num_days} days: {np.round(percent_increase, 1)}%')
+    # print(f'Max: {max_price}, Min: {min_price}, Current: {prices[-1]}')
+    # print(f'Variance: {int(price_variance)}, STD: {int(price_std)}')
+    return {
+        'crypto_symbol': crypto_symbol,
+        'num_days': num_days,
+        'percent_increase': percent_increase,
+        'max_price': max_price,
+        'min_price': min_price,
+        'last_price': prices[-1],
+        'price_std': price_std
+    }
+
+# coin_price_history('LOOT')
+
+# USER INFO
+
+def user_info(screen_name, n_posts, n_followers):
 
     user = api.get_user(screen_name=screen_name)
-
-    # Verified
-    # print(f'{screen_name} Verified {user.verified}')
 
     # # Age of Account
     created = user.created_at
@@ -134,33 +176,44 @@ def user_info(screen_name, n_posts):
     links = re.findall(r'(https?://\S+)', description)
     # print(f'{screen_name} URL: {url}, Links in Description: {links}')
 
-    # # Number of Followers
-    # followers_count = user.followers_count
-    # print(f'{screen_name} number of followers: {followers_count}')
-
     # # Individual Followers
-    follower_list = []
-    followers = api.get_followers(screen_name=screen_name, count=10)
-    # print(f'{screen_name} followers:')
-    for follower in followers:
-        follower_list.append(follower.screen_name)
-        # print(follower.screen_name)
+    # follower_list = []
+    # followers = api.get_followers(screen_name=screen_name, count=n_followers)
+    # # print(f'{screen_name} followers:')
+    # for follower in followers:
+    #     follower_list.append(follower.screen_name)
+    #     # print(follower.screen_name)
 
-    # # Number of Likes They Have Made
-    # favourites_count = user.favourites_count
-    # print(f'{screen_name} number of posts liked: {favourites_count}')
+    # # Coin Price
+    # coin_symbol = [t[1::] for t in user.description.replace('.', ' ').replace(',', ' ').split() if t.startswith('$') and t[1::].isalpha()]
+    # if coin_symbol:
+    #     coin_price_dict = coin_price_history(coin_symbol[0])
+    # else:
+    #     coin_price_dict = {
+    #         'crypto_symbol': np.nan,
+    #         'num_days': np.nan,
+    #         'percent_increase': np.nan,
+    #         'max_price': np.nan,
+    #         'min_price': np.nan,
+    #         'last_price': np.nan,
+    #         'price_std': np.nan
+    #     }
 
     # Last 20 Posts
     likes_last_n = []
     rt_last_n = []
     user_mentions_set = set()
-    tweets = api.user_timeline(screen_name=screen_name, count=20, tweet_mode='extended')
+    tweets = api.user_timeline(screen_name=screen_name, count=n_posts, tweet_mode='extended')
     for tweet in tweets:
         likes_last_n.append(tweet.favorite_count)
         rt_last_n.append(tweet.retweet_count)
         user_mentions = tweet.entities['user_mentions']
         for mention in user_mentions:
             user_mentions_set.add(mention['screen_name'])
+    if not likes_last_n:
+        likes_last_n = [0]
+    if not rt_last_n:
+        rt_last_n = [0]
     avg_likes = sum(likes_last_n) / len(likes_last_n)
     avg_rt = sum(rt_last_n) / len(rt_last_n)
     # print(f'{screen_name} Average Number of Likes Over Last {n_posts} Posts: {avg_likes}')
@@ -169,19 +222,25 @@ def user_info(screen_name, n_posts):
 
     user_dict = {
         'screen_name': screen_name,
+        'name': user.name,
         'verified': user.verified,
         'created_at': user.created_at,
         'age': age, 
+        'age_days': age.days,
         'url': user.url,
         'description': user.description,
         'links': links, 
         'follower_count': user.followers_count,
-        'followers': follower_list,
+        # 'followers': follower_list,
         'favourites_count': user.favourites_count,
-        f'avg_likes_{n_posts}': avg_likes,
-        f'avg_rt_{n_posts}': avg_rt,
-        f'user_mentions_{n_posts}': list(user_mentions_set)
+        f'avg_likes_last_{n_posts}': avg_likes,
+        f'avg_rt_last_{n_posts}': avg_rt,
+        f'user_mentions_last_{n_posts}': list(user_mentions_set)
     }
+
+    # user_dict.update(coin_price_dict)
+
+    # print(user_dict)
 
     return user_dict
 
@@ -195,6 +254,9 @@ def pretty(d, indent=0):
 
 # print(pretty(user_info('elonmusk', 20), indent=0))
 
+
+
+
 # SEARCH QUERY
 # superhero since:2015-12-21    containing “superhero” and sent since date “2015-12-21” (year-month-day).
 # hilarious filter:links     containing “hilarious” and linking to URL.
@@ -204,6 +266,23 @@ def pretty(d, indent=0):
 # @NASA   mentioning Twitter account “NASA”.
 # Look at topics?
 
+bot_screen_name = 'Web3Alerts'
+
+tweets = api.user_timeline(screen_name=bot_screen_name, count=160)
+user_projects = []
+user_projects_details_dicts = []
+# count = 0
+for tweet in tweets:
+    # count += 1
+    # print(count)
+    if not tweet.entities['user_mentions']:
+        continue
+    user_project = tweet.entities['user_mentions'][0]['screen_name']
+    user_projects.append(user_project)
+    user_projects_details_dicts.append(user_info(user_project, n_posts=5, n_followers=3))
+
+df = pd.DataFrame.from_dict(user_projects_details_dicts)
+df.to_csv('user_projects_train.csv')
 
 
 # # GOOGLE TRENDS with pytrends
@@ -246,35 +325,3 @@ def pretty(d, indent=0):
 
 # A WAY TO PICK UP PROJECTS
 
-crypto_compare_api_key = 'f78fea12b032c8d3b1e8e2b1674433e4758c07692f79537447db10b374f77f56'
-
-def coin_price_history(crypto_symbol, num_days=20):
-
-    # request_url = f'https://min-api.cryptocompare.com/data/v2/histoday?fsym=ETH&tsym=USD&limit=20&toTs=-1&api_key={crypto_compare_api_key}'
-    request_url = f'https://min-api.cryptocompare.com/data/v2/histoday?fsym={crypto_symbol}&tsym=USD&limit={num_days}&toTs=-1&api_key=YOURKEYHERE'
-
-    r = requests.get(url=request_url)
-
-    data = r.json()['Data']['Data']
-    timestamp_prices = {}
-    for datum in data:
-        datum_date = datetime.fromtimestamp(datum['time']).date()
-        timestamp_prices[datum_date] = datum['close']
-    # print(timestamp_prices)
-
-    ts = list(timestamp_prices.keys())
-    prices = list(timestamp_prices.values())
-
-    plt.plot(ts, prices)
-    plt.show()
-
-    percent_increase = ((prices[-1] / prices[0]) - 1) * 100
-    price_variance = np.var(prices)
-    price_std = np.std(prices)
-    print(f'Percent change over {num_days} days: {np.round(percent_increase, 1)}%')
-    print(f'Max: {max(prices)}, Min: {min(prices)}, Current: {prices[-1]}')
-    print(f'Variance: {int(price_variance)}, STD: {int(price_std)}')
-
-coin_price_history('LOOT')
-
-# def coin_increase_percent(crypto_symbol):
