@@ -231,6 +231,7 @@ def user_info(screen_name, n_posts, n_followers):
         'description': user.description,
         'links': links, 
         'follower_count': user.followers_count,
+        'avg_new_followers_per_day': user.followers_count / age.days,
         # 'followers': follower_list,
         'favourites_count': user.favourites_count,
         f'avg_likes_last_{n_posts}': avg_likes,
