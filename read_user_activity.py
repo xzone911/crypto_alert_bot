@@ -158,7 +158,7 @@ def coin_price_history(crypto_symbol, num_days=20):
 
 # USER INFO
 
-def user_info(screen_name, n_posts, n_followers):
+def user_info(screen_name, n_user_mention_posts, n_favorites, n_followers=0):
 
     user = api.get_user(screen_name=screen_name)
 
@@ -199,11 +199,22 @@ def user_info(screen_name, n_posts, n_followers):
     #         'price_std': np.nan
     #     }
 
-    # Last 20 Posts
+    # Favorited Users
+    favorites_users = []
+    already_liked = []
+    favorites = api.get_favorites(screen_name=screen_name, count = n_favorites)
+    for tweet in favorites:
+        tweet_user_screen_name = tweet.user.screen_name
+        if tweet_user_screen_name not in already_liked:
+            favorites_users.append(tweet_user_screen_name)
+            already_liked.append(tweet_user_screen_name)
+
+
+    # Last N Posts
     likes_last_n = []
     rt_last_n = []
     user_mentions_set = set()
-    tweets = api.user_timeline(screen_name=screen_name, count=n_posts, tweet_mode='extended')
+    tweets = api.user_timeline(screen_name=screen_name, count=n_user_mention_posts, tweet_mode='extended')
     for tweet in tweets:
         likes_last_n.append(tweet.favorite_count)
         rt_last_n.append(tweet.retweet_count)
@@ -216,9 +227,24 @@ def user_info(screen_name, n_posts, n_followers):
         rt_last_n = [0]
     avg_likes = sum(likes_last_n) / len(likes_last_n)
     avg_rt = sum(rt_last_n) / len(rt_last_n)
-    # print(f'{screen_name} Average Number of Likes Over Last {n_posts} Posts: {avg_likes}')
-    # print(f'{screen_name} Average Number of Retweets Over Last {n_posts} Posts: {avg_rt}')
-    # print(f'{screen_name} User Mentions Over Last {n_posts} Posts: {user_mentions_set}')
+    # print(f'{screen_name} Average Number of Likes Over Last {n_user_mention_posts} Posts: {avg_likes}')
+    # print(f'{screen_name} Average Number of Retweets Over Last {n_user_mention_posts} Posts: {avg_rt}')
+    # print(f'{screen_name} User Mentions Over Last {n_user_mention_posts} Posts: {user_mentions_set}')
+
+
+    # Rank by Number of Followers
+    user_follower_count = user.followers_count
+
+    if user_follower_count > 1000000:
+        follower_rank = 4
+    elif user_follower_count > 100000:
+        follower_rank = 3
+    elif user_follower_count > 10000:
+        follower_rank = 2
+    elif user_follower_count > 1000:
+        follower_rank = 1
+    else:
+        follower_rank = 0
 
     user_dict = {
         'screen_name': screen_name,
@@ -230,13 +256,15 @@ def user_info(screen_name, n_posts, n_followers):
         'url': user.url,
         'description': user.description,
         'links': links, 
-        'follower_count': user.followers_count,
+        'follower_count': user_follower_count,
+        'follower_rank': follower_rank,
         'avg_new_followers_per_day': user.followers_count / age.days,
         # 'followers': follower_list,
         'favourites_count': user.favourites_count,
-        f'avg_likes_last_{n_posts}': avg_likes,
-        f'avg_rt_last_{n_posts}': avg_rt,
-        f'user_mentions_last_{n_posts}': list(user_mentions_set)
+        'favorites_users': favorites_users,
+        f'avg_likes_last_{n_user_mention_posts}': avg_likes,
+        f'avg_rt_last_{n_user_mention_posts}': avg_rt,
+        f'user_mentions_last_{n_user_mention_posts}': list(user_mentions_set)
     }
 
     # user_dict.update(coin_price_dict)
@@ -267,23 +295,52 @@ def pretty(d, indent=0):
 # @NASA   mentioning Twitter account “NASA”.
 # Look at topics?
 
-bot_screen_name = 'Web3Alerts'
 
-tweets = api.user_timeline(screen_name=bot_screen_name, count=160)
-user_projects = []
-user_projects_details_dicts = []
-# count = 0
-for tweet in tweets:
-    # count += 1
-    # print(count)
-    if not tweet.entities['user_mentions']:
-        continue
-    user_project = tweet.entities['user_mentions'][0]['screen_name']
-    user_projects.append(user_project)
-    user_projects_details_dicts.append(user_info(user_project, n_posts=5, n_followers=3))
 
-df = pd.DataFrame.from_dict(user_projects_details_dicts)
-df.to_csv('user_projects_train.csv')
+
+# bot_screen_name = 'Web3Alerts'
+
+# tweets = api.user_timeline(screen_name=bot_screen_name, count=160)
+# user_projects = []
+# user_projects_details_dicts = []
+# # count = 0
+# for tweet in tweets:
+#     # count += 1
+#     # print(count)
+#     if not tweet.entities['user_mentions']:
+#         continue
+#     user_project = tweet.entities['user_mentions'][0]['screen_name']
+#     user_projects.append(user_project)
+#     user_projects_details_dicts.append(user_info(user_project, n_posts=5, n_followers=3))
+
+# df = pd.DataFrame.from_dict(user_projects_details_dicts)
+# df.to_csv('user_projects_train.csv')
+
+
+total_users = 150
+users_start = 75
+total_user_mention_posts = 50
+total_favorites = 50
+total_followers = 0
+
+my_username = 'john_pratt_'
+
+crypto_influencers = api.get_friends(screen_name=my_username, count=total_users)
+crypto_influencers = crypto_influencers[users_start:]
+crypto_influencer_dicts = []
+count = users_start
+for crypto_influencer in crypto_influencers:
+    count += 1
+    print(count)
+    crypto_influencer_dicts.append(user_info(
+        crypto_influencer.screen_name, 
+        n_user_mention_posts=total_user_mention_posts, 
+        n_favorites=total_favorites
+    ))
+df = pd.DataFrame.from_dict(crypto_influencer_dicts)
+df.to_csv('crypto_influencers_2.csv')
+# df.to_csv('crypto_influencers_test.csv')
+
 
 
 # # GOOGLE TRENDS with pytrends
